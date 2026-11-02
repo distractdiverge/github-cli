@@ -18,15 +18,51 @@ description: Use the GitHub CLI (gh) to create repos, connect/push local git rep
 5. Before the first push, check for secrets: `.env`, keys, tokens. Make sure `.gitignore` covers them.
 6. Prefer `--json` output when you need to read results, so they parse cleanly.
 
-## 1. New repo from an existing local folder (most common)
+## 1. Local folder → new GitHub repo → set remote → push (most common)
+Run these in order. Stop and report if any step fails.
+
+**Step 1. Check the account and the folder**
 ```sh
+gh auth status                     # must show a logged-in account
+gh api user --jq .login            # the GitHub username to create the repo under
 cd path/to/project
-git init                      # skip if already a git repo
-git add -A && git commit -m "Initial commit"
+git rev-parse --is-inside-work-tree 2>/dev/null || git init
+git remote -v                      # note whether "origin" already exists
+```
+
+**Step 2. Make sure there is a commit to push**
+```sh
+cat .gitignore                     # confirm .env, keys, node_modules etc. are ignored
+git add -A
+git commit -m "Initial commit"     # skip if commits already exist (git log shows them)
+git branch -M main                 # name the branch main
+```
+
+**Step 3. Create the remote repo on GitHub**
+```sh
+gh repo create my-project --private --description "Short description"
+```
+- Use the folder name as the repo name unless the user gave one.
+- If it says the name already exists, ask the user: reuse it, or pick a new name.
+
+**Step 4. Point the local repo at it**
+```sh
+URL=$(gh repo view my-project --json url --jq .url).git
+git remote add origin "$URL"       # if origin already exists: git remote set-url origin "$URL"
+gh auth setup-git                  # lets git push over HTTPS using gh's login
+```
+
+**Step 5. Push and verify**
+```sh
+git push -u origin main
+git status                         # should say "up to date with 'origin/main'"
+gh repo view my-project --web      # optional: open it in the browser
+```
+
+**Shortcut:** steps 3–5 in one command, when origin does not exist yet:
+```sh
 gh repo create my-project --private --source=. --remote=origin --push
 ```
-- `--source=.` uses the current folder, `--remote=origin` adds the remote, `--push` pushes it.
-- Omit the name to use the folder name. Add `--description "..."` if wanted.
 
 ## 2. New empty repo on GitHub, then clone it
 ```sh
